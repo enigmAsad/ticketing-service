@@ -7,11 +7,13 @@ from ticketing_service.api.schemas import (
     EventCreateRequest,
     EventListResponse,
     EventResponse,
+    SeatAvailabilityResponse,
 )
-from ticketing_service.repositories import EventRepository
+from ticketing_service.repositories import BookingRepository, EventRepository
 
 app = FastAPI(title="Ticketing Service")
 event_repository = EventRepository()
+booking_repository = BookingRepository()
 
 
 @app.get("/health")
@@ -89,4 +91,26 @@ def get_event(event_id: UUID) -> EventResponse:
         total_seats=event.total_seats,
         created_at=event.created_at,
         updated_at=event.updated_at,
+    )
+
+
+@app.get(
+    "/events/{event_id}/seats",
+    response_model=SeatAvailabilityResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def get_seat_availability(event_id: UUID) -> SeatAvailabilityResponse:
+    event = event_repository.get(event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    bookings = booking_repository.list_by_event(event_id)
+    booked_seats = sorted({seat for booking in bookings for seat in booking.seats})
+    booked_set = set(booked_seats)
+    available_seats = [seat for seat in range(1, event.total_seats + 1) if seat not in booked_set]
+
+    return SeatAvailabilityResponse(
+        available_seats=available_seats,
+        booked_seats=booked_seats,
+        capacity=event.total_seats,
     )
