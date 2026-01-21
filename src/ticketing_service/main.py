@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
@@ -33,7 +34,10 @@ def health_check() -> dict[str, str]:
 
 @app.exception_handler(HTTPException)
 def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    error_name = status.HTTP_STATUS_CODES.get(exc.status_code, "Error")
+    try:
+        error_name = HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        error_name = "Error"
     detail = exc.detail if isinstance(exc.detail, str) else "Request failed."
     response = ErrorResponse(error=error_name, detail=detail)
     return JSONResponse(status_code=exc.status_code, content=response.model_dump())
@@ -42,7 +46,7 @@ def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     response = ErrorResponse(error="Validation Error", detail="Request validation failed.")
-    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=response.model_dump())
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content=response.model_dump())
 
 
 @app.exception_handler(Exception)
