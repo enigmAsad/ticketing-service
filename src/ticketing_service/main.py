@@ -1,7 +1,10 @@
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
+from ticketing_service.api.runtime import RateLimiter, configure_logging, create_request_middleware
 from ticketing_service.api.schemas import (
     BookingCreateRequest,
     BookingListResponse,
@@ -18,11 +21,35 @@ from ticketing_service.repositories import BookingRepository, EventRepository
 app = FastAPI(title="Ticketing Service")
 event_repository = EventRepository()
 booking_repository = BookingRepository()
+logger = configure_logging()
+rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
+app.middleware("http")(create_request_middleware(rate_limiter, max_body_bytes=1_000_000, logger=logger))
 
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.exception_handler(HTTPException)
+def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    error_name = status.HTTP_STATUS_CODES.get(exc.status_code, "Error")
+    detail = exc.detail if isinstance(exc.detail, str) else "Request failed."
+    response = ErrorResponse(error=error_name, detail=detail)
+    return JSONResponse(status_code=exc.status_code, content=response.model_dump())
+
+
+@app.exception_handler(RequestValidationError)
+def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    response = ErrorResponse(error="Validation Error", detail="Request validation failed.")
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=response.model_dump())
+
+
+@app.exception_handler(Exception)
+def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled error for request %s", request.url.path)
+    response = ErrorResponse(error="Internal Server Error", detail="Unexpected server error.")
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=response.model_dump())
 
 
 @app.post(

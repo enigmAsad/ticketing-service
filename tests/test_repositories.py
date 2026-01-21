@@ -28,6 +28,6 @@ def test_booking_repository_create_and_filter() -> None:
         total_seats=250,
     ).id
 
-    booking = repo.create(event_id=event_id, seats=[1, 2, 3], status=BookingStatus.CONFIRMED)
+    booking = repo.reserve(event_id=event_id, seats=[1, 2, 3], status=BookingStatus.CONFIRMED)
     assert repo.get(booking.id) is not None
     assert repo.list_by_event(event_id) == [booking]
