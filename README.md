@@ -1,10 +1,46 @@
 # Ticketing Service
 
-## API Overview
-The service exposes a simple REST API for events and bookings. OpenAPI docs are
-available at `/docs` and `/openapi.json` when the service is running.
+FastAPI service for an in-memory concert ticketing system. It supports event
+creation, seat availability queries, and seat bookings with concurrency-safe
+reservation logic.
 
-### Example Payloads
+## Features
+- Create and list events
+- Check seat availability by event
+- Reserve one or more seats per booking
+- In-memory storage (no external database)
+- Rate limiting, request-size guard, and structured error responses
+
+## Tech Stack
+- Python 3.12
+- FastAPI
+- Uvicorn
+- Pytest
+
+## Requirements
+- Python 3.12 (see `.python-version`)
+- `uv` package manager (recommended)
+
+## Install
+```bash
+cd "ticketing-service"
+uv sync
+```
+
+## Run
+```bash
+cd "ticketing-service"
+uv run uvicorn ticketing_service.main:app --reload
+```
+
+The API will be available at `http://127.0.0.1:8000`.
+
+## API Documentation
+OpenAPI and Swagger UI are available at:
+- `http://127.0.0.1:8000/docs`
+- `http://127.0.0.1:8000/openapi.json`
+
+## Example Requests
 
 Create an event:
 ```json
@@ -23,3 +59,18 @@ Create a booking:
   "seats": [1, 2, 3]
 }
 ```
+
+## Testing
+```bash
+cd "ticketing-service"
+uv sync --extra test
+uv run pytest
+```
+
+## Project Structure
+- `src/ticketing_service` - application code
+- `tests` - unit and integration tests
+- `docs` - implementation notes and setup guide
+
+## License
+MIT. See `LICENSE`.
