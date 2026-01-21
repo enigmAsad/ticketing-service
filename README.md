@@ -30,7 +30,7 @@ uv sync
 ## Run
 ```bash
 cd "ticketing-service"
-uv run uvicorn ticketing_service.main:app --reload
+uv run python -m ticketing_service.run
 ```
 
 The API will be available at `http://127.0.0.1:8000`.

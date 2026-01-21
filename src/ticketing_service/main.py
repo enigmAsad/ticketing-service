@@ -18,14 +18,18 @@ from ticketing_service.api.schemas import (
     SeatAvailabilityResponse,
 )
 from ticketing_service.api.validation import validate_seat_numbers
+from ticketing_service.config import settings
 from ticketing_service.repositories import BookingRepository, EventRepository
 
 app = FastAPI(title="Ticketing Service")
 event_repository = EventRepository()
 booking_repository = BookingRepository()
-logger = configure_logging()
-rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
-app.middleware("http")(create_request_middleware(rate_limiter, max_body_bytes=1_000_000, logger=logger))
+logger = configure_logging(settings.log_level)
+rate_limiter = RateLimiter(
+    max_requests=settings.rate_limit_max_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+)
+app.middleware("http")(create_request_middleware(rate_limiter, max_body_bytes=settings.max_body_bytes, logger=logger))
 
 
 @app.get("/health")
