@@ -40,23 +40,32 @@ class BookingRepository:
         self._bookings: dict[UUID, Booking] = {}
         self._lock = Lock()
 
-    def create(
+    def reserve(
         self,
         event_id: UUID,
         seats: list[int] | tuple[int, ...],
         status: BookingStatus = BookingStatus.CONFIRMED,
     ) -> Booking:
         now = utc_now()
+        requested_seats = tuple(seats)
         booking = Booking(
             id=uuid4(),
             event_id=event_id,
-            seats=tuple(seats),
+            seats=requested_seats,
             status=status,
             created_at=now,
             updated_at=now,
         )
-        # Lock to keep writes consistent under concurrency.
+        # Lock to ensure seat reservation is atomic.
         with self._lock:
+            booked_seats = {
+                seat
+                for existing in self._bookings.values()
+                if existing.event_id == event_id and existing.status != BookingStatus.CANCELLED
+                for seat in existing.seats
+            }
+            if any(seat in booked_seats for seat in requested_seats):
+                raise ValueError("One or more seats are already booked.")
             self._bookings[booking.id] = booking
         return booking
 
