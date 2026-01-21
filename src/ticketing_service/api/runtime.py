@@ -20,15 +20,32 @@ class RateLimiter:
         self._window_seconds = window_seconds
         self._buckets: dict[str, deque[float]] = defaultdict(deque)
         self._lock = Lock()
+        self._last_cleanup = time()
+
+    def _cleanup_stale_buckets(self, now: float) -> None:
+        keys_to_delete = []
+        for key, bucket in self._buckets.items():
+            if bucket and (now - bucket[-1] > self._window_seconds):
+                keys_to_delete.append(key)
+
+        for key in keys_to_delete:
+            del self._buckets[key]
+
+        self._last_cleanup = now
 
     def allow(self, key: str) -> bool:
         now = time()
         with self._lock:
+            if now - self._last_cleanup > 60:
+                self._cleanup_stale_buckets(now)
+
             bucket = self._buckets[key]
             while bucket and now - bucket[0] > self._window_seconds:
                 bucket.popleft()
+
             if len(bucket) >= self._max_requests:
                 return False
+
             bucket.append(now)
         return True
 

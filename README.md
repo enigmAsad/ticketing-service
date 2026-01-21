@@ -40,6 +40,10 @@ OpenAPI and Swagger UI are available at:
 - `http://127.0.0.1:8000/docs`
 - `http://127.0.0.1:8000/openapi.json`
 
+Seat availability defaults to counts only. Use:
+- `?detail=list&offset=0&limit=1000` for a page of available seats
+- `?detail=range` for compact ranges
+
 ## Example Requests
 
 Create an event:

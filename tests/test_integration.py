@@ -33,9 +33,10 @@ def test_event_and_booking_flow_end_to_end() -> None:
     assert fetch_event.status_code == 200
     assert fetch_event.json()["id"] == event_id
 
-    seat_check = client.get(f"/events/{event_id}/seats")
+    seat_check = client.get(f"/events/{event_id}/seats?detail=list")
     assert seat_check.status_code == 200
     assert seat_check.json()["available_seats"] == [1, 2, 3, 4, 5]
+    assert seat_check.json()["available_count"] == 5
 
     booking_payload = {"event_id": event_id, "seats": [1, 2]}
     create_booking = client.post("/bookings", json=booking_payload)
@@ -44,7 +45,7 @@ def test_event_and_booking_flow_end_to_end() -> None:
 
     seat_check_after = client.get(f"/events/{event_id}/seats")
     assert seat_check_after.status_code == 200
-    assert seat_check_after.json()["booked_seats"] == [1, 2]
+    assert seat_check_after.json()["booked_count"] == 2
 
     fetch_booking = client.get(f"/bookings/{booking_id}")
     assert fetch_booking.status_code == 200

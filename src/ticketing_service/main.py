@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from typing import Literal
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
@@ -134,21 +135,77 @@ def get_event(event_id: UUID) -> EventResponse:
     response_model=SeatAvailabilityResponse,
     responses={404: {"model": ErrorResponse}},
 )
-def get_seat_availability(event_id: UUID) -> SeatAvailabilityResponse:
+def get_seat_availability(
+    event_id: UUID,
+    detail: Literal["count", "list", "range"] = Query("count"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000),
+) -> SeatAvailabilityResponse:
     event = event_repository.get(event_id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     bookings = booking_repository.list_by_event(event_id)
-    booked_seats = sorted({seat for booking in bookings for seat in booking.seats})
-    booked_set = set(booked_seats)
-    available_seats = [seat for seat in range(1, event.total_seats + 1) if seat not in booked_set]
+    booked_set = {seat for booking in bookings for seat in booking.seats}
+    booked_count = len(booked_set)
+    available_count = event.total_seats - booked_count
+
+    available_seats: list[int] | None = None
+    available_ranges: list[list[int]] | None = None
+
+    if detail == "list":
+        available_seats = _available_seats_page(
+            total_seats=event.total_seats,
+            booked_set=booked_set,
+            offset=offset,
+            limit=limit,
+        )
+    elif detail == "range":
+        available_ranges = _available_seat_ranges(event.total_seats, booked_set)
 
     return SeatAvailabilityResponse(
-        available_seats=available_seats,
-        booked_seats=booked_seats,
         capacity=event.total_seats,
+        booked_count=booked_count,
+        available_count=available_count,
+        available_seats=available_seats,
+        available_ranges=available_ranges,
     )
+
+
+def _available_seats_page(
+    total_seats: int,
+    booked_set: set[int],
+    offset: int,
+    limit: int,
+) -> list[int]:
+    results: list[int] = []
+    skipped = 0
+    for seat_number in range(1, total_seats + 1):
+        if seat_number in booked_set:
+            continue
+        if skipped < offset:
+            skipped += 1
+            continue
+        results.append(seat_number)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _available_seat_ranges(total_seats: int, booked_set: set[int]) -> list[list[int]]:
+    ranges: list[list[int]] = []
+    start = None
+    for seat_number in range(1, total_seats + 1):
+        if seat_number in booked_set:
+            if start is not None:
+                ranges.append([start, seat_number - 1])
+                start = None
+            continue
+        if start is None:
+            start = seat_number
+    if start is not None:
+        ranges.append([start, total_seats])
+    return ranges
 
 
 @app.post(

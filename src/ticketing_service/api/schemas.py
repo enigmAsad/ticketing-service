@@ -16,7 +16,7 @@ class EventCreateRequest(ApiBaseModel):
     name: str = Field(min_length=1, max_length=200)
     starts_at: datetime
     venue: str = Field(min_length=1, max_length=200)
-    total_seats: int = Field(gt=0)
+    total_seats: int = Field(gt=0, le=100_000, description="Max 100k seats for performance.")
 
     @field_validator("starts_at")
     @classmethod
@@ -86,9 +86,11 @@ class BookingListResponse(ApiBaseModel):
 
 
 class SeatAvailabilityResponse(ApiBaseModel):
-    available_seats: list[int]
-    booked_seats: list[int]
     capacity: int = Field(gt=0)
+    booked_count: int = Field(ge=0)
+    available_count: int = Field(ge=0)
+    available_seats: list[int] | None = None
+    available_ranges: list[list[int]] | None = None
 
 
 class ErrorResponse(ApiBaseModel):

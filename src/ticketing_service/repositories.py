@@ -38,6 +38,8 @@ class EventRepository:
 class BookingRepository:
     def __init__(self) -> None:
         self._bookings: dict[UUID, Booking] = {}
+        self._event_bookings: dict[UUID, list[Booking]] = {}
+        self._occupied_seats: dict[UUID, set[int]] = {}
         self._lock = Lock()
 
     def reserve(
@@ -56,21 +58,28 @@ class BookingRepository:
             created_at=now,
             updated_at=now,
         )
-        # Lock to ensure seat reservation is atomic.
+
         with self._lock:
-            booked_seats = {
-                seat
-                for existing in self._bookings.values()
-                if existing.event_id == event_id and existing.status != BookingStatus.CANCELLED
-                for seat in existing.seats
-            }
-            if any(seat in booked_seats for seat in requested_seats):
+            if event_id not in self._occupied_seats:
+                self._occupied_seats[event_id] = set()
+
+            current_occupied = self._occupied_seats[event_id]
+            if any(seat in current_occupied for seat in requested_seats):
                 raise ValueError("One or more seats are already booked.")
+
             self._bookings[booking.id] = booking
+
+            if event_id not in self._event_bookings:
+                self._event_bookings[event_id] = []
+            self._event_bookings[event_id].append(booking)
+
+            current_occupied.update(requested_seats)
+
         return booking
 
     def get(self, booking_id: UUID) -> Booking | None:
         return self._bookings.get(booking_id)
 
     def list_by_event(self, event_id: UUID) -> list[Booking]:
-        return [booking for booking in self._bookings.values() if booking.event_id == event_id]
+        return list(self._event_bookings.get(event_id, []))
+
