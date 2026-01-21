@@ -3,12 +3,16 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException, Query, status
 
 from ticketing_service.api.schemas import (
+    BookingCreateRequest,
+    BookingListResponse,
+    BookingResponse,
     ErrorResponse,
     EventCreateRequest,
     EventListResponse,
     EventResponse,
     SeatAvailabilityResponse,
 )
+from ticketing_service.api.validation import validate_seat_numbers
 from ticketing_service.repositories import BookingRepository, EventRepository
 
 app = FastAPI(title="Ticketing Service")
@@ -113,4 +117,87 @@ def get_seat_availability(event_id: UUID) -> SeatAvailabilityResponse:
         available_seats=available_seats,
         booked_seats=booked_seats,
         capacity=event.total_seats,
+    )
+
+
+@app.post(
+    "/bookings",
+    response_model=BookingResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_booking(payload: BookingCreateRequest) -> BookingResponse:
+    event = event_repository.get(payload.event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    try:
+        validate_seat_numbers(payload.seats, event.total_seats)
+        booking = booking_repository.reserve(event_id=event.id, seats=payload.seats)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_409_CONFLICT if "already booked" in detail.lower() else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return BookingResponse(
+        id=booking.id,
+        event_id=booking.event_id,
+        seats=list(booking.seats),
+        status=booking.status,
+        created_at=booking.created_at,
+        updated_at=booking.updated_at,
+    )
+
+
+@app.get(
+    "/bookings/{booking_id}",
+    response_model=BookingResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def get_booking(booking_id: UUID) -> BookingResponse:
+    booking = booking_repository.get(booking_id)
+    if booking is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
+
+    return BookingResponse(
+        id=booking.id,
+        event_id=booking.event_id,
+        seats=list(booking.seats),
+        status=booking.status,
+        created_at=booking.created_at,
+        updated_at=booking.updated_at,
+    )
+
+
+@app.get(
+    "/events/{event_id}/bookings",
+    response_model=BookingListResponse,
+    responses={404: {"model": ErrorResponse}},
+)
+def list_event_bookings(
+    event_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> BookingListResponse:
+    event = event_repository.get(event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+
+    bookings = booking_repository.list_by_event(event_id)
+    paged = bookings[offset : offset + limit]
+    return BookingListResponse(
+        items=[
+            BookingResponse(
+                id=booking.id,
+                event_id=booking.event_id,
+                seats=list(booking.seats),
+                status=booking.status,
+                created_at=booking.created_at,
+                updated_at=booking.updated_at,
+            )
+            for booking in paged
+        ],
+        total=len(bookings),
     )
