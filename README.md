@@ -74,7 +74,6 @@ uv run pytest
 ## Project Structure
 - `src/ticketing_service` - application code
 - `tests` - unit and integration tests
-- `docs` - implementation notes and setup guide
 
 ## License
 MIT. See `LICENSE`.
